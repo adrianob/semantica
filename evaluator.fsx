@@ -8,14 +8,12 @@ type term =
   | TmNil
   | TmVar of string
   | TmIf of term * term * term
+  | TmLet of term * term * term
   | TmFun of term * term
-  | TmZero
-  | TmSucc of term
   | TmIsEmpty of term
   | TmHd of term
   | TmTl of term
   | TmTry of term * term
-  | TmIsZero of term
 
 (* Excecao a ser ativada quando termo for uma FORMA NORMAL *)
 exception NoRuleApplies
@@ -24,17 +22,20 @@ let rec replaceTerm expression ident newTerm =
   | TmN t1 -> expression
   | TmTrue -> expression
   | TmFalse -> expression
+  | TmVar ident -> newTerm
   | TmPlus (t1, t2) -> TmPlus (replaceTerm t1 ident newTerm, replaceTerm t2 ident newTerm)
   | TmMinus (t1, t2) -> TmMinus (replaceTerm t1 ident newTerm, replaceTerm t2 ident newTerm)
   | TmIf ( t1 , t2 , t3 ) -> TmIf (replaceTerm t1 ident newTerm, replaceTerm t2 ident newTerm, replaceTerm t3 ident newTerm)
   | TmApp (t1, t2) -> TmApp (replaceTerm t1 ident newTerm, replaceTerm t2 ident newTerm)
-  | TmVar ident -> newTerm
+  | TmLet (TmVar ident, t2, t3) -> TmLet (TmVar ident, replaceTerm t2 ident newTerm, t3)
+  | TmLet (t1, t2, t3) -> TmLet (t1, replaceTerm t2 ident newTerm, replaceTerm t3 ident newTerm)
   | _ -> expression
-(* Funcao auxiliar para determinar se um termo e um VALOR NUMERICO *)
-let rec isnumericval t =
+let isValue t =
   match t with
-  TmZero -> true
-  | TmSucc ( t1 ) -> isnumericval t1
+  | TmTrue -> true
+  | TmFalse -> true
+  | TmN _ -> true
+  | TmFun (_, _) -> true
   | _ -> false
 (* Implementacao da funcao STEP de avaliacao em um passo *)
 let rec step t =
@@ -47,18 +48,6 @@ let rec step t =
   | TmIf ( t1 , t2 , t3 ) -> (* regra E−If *)
     let t1' = step t1 in
     TmIf ( t1', t2 , t3 )
-(* CASO SUCC ( t1 ) *)
-  | TmSucc ( t1 ) -> (* regra E−Succ *)
-    let t1' = step t1 in
-    TmSucc ( t1')
-(* CASO ISZERO ( t1 ) *)
-  | TmIsZero ( TmZero ) -> (* regra E−IsZeroZero *)
-    TmTrue
-  | TmIsZero ( TmSucc ( nv1 )) when ( isnumericval nv1 ) -> (* regra E−IsZeroSucc *)
-    TmFalse
-  | TmIsZero ( t1 ) -> (* regra E−IsZero *)
-    let t1' = step t1 in
-    TmIsZero ( t1')
 (* CASO + ( t1, t2 ) *)
   | TmPlus ( TmN t1, TmN t2 )  ->
     TmN (t1 + t2)
@@ -78,20 +67,20 @@ let rec step t =
     let t1' = step t1 in
     TmMinus (t1', t2)
 (* CASO t1 t2 *)
-  | TmApp (TmFun (TmVar t1, t2), TmN t3) ->
-    replaceTerm t2 t1 (TmN t3)
-  | TmApp (TmFun (TmVar t1, t2), TmTrue) ->
-    replaceTerm t2 t1 TmTrue
-  | TmApp (TmFun (TmVar t1, t2), TmFalse) ->
-    replaceTerm t2 t1 TmFalse
-  | TmApp (TmFun (TmVar t1, t2), TmFun (t3, t4)) ->
-    replaceTerm t2 t1 (TmFun (t3, t4))
+  | TmApp (TmFun (TmVar t1, t2), t3) when (isValue t3) ->
+    replaceTerm t2 t1 t3
   | TmApp (TmFun (TmVar t1, t2), t3) ->
     let t3' = step t3 in
     TmApp (TmFun (TmVar t1, t2), t3')
   | TmApp (t1, t2) ->
     let t1' = step t1 in
     TmApp (t1' , t2)
+(* CASO  TmLet *)
+  | TmLet (TmVar t1, t2, t3) when (isValue t2) ->
+    replaceTerm t3 t1 t2
+  | TmLet (TmVar t1, t2, t3) ->
+    let t2' = step t2 in
+    TmLet (TmVar t1, t2', t3)
 (* CASO Nenhuma regra se aplique ao termo *)
   | _ ->
     raise NoRuleApplies
@@ -101,12 +90,6 @@ let rec eval t =
       in eval t'
   with NoRuleApplies -> t
 (* ASTs para teste *)
-let t1 = TmIsZero ( TmZero )
-let t2 = TmZero
-let t3 = TmSucc ( TmZero )
-let tif = TmIf ( t1 , t2 , t3 )
-let t4 = TmIsZero ( TmSucc ( TmZero ))
-let t5 = TmIsZero ( TmFalse )
 let t10 = eval (TmN 10)
 let t11 = eval (TmPlus (TmN 10, TmN 2) )
 let t12 = eval (TmPlus (TmPlus (TmN 10, TmN 4), TmN 2) )
@@ -114,7 +97,7 @@ let t13 = eval (TmMinus (TmPlus (TmN 10, TmN 4), TmN 2) )
 let t18 = eval (TmApp ((TmFun (TmVar "x", (TmPlus (TmVar "x", TmN 2) ) ) ), TmN 5))
 let t19 = TmPlus (TmVar "x", TmN 2)
 
-printf "%b\n" (eval t1 = TmTrue)
+(*printf "%b\n" (eval t1 = TmTrue)*)
 let test = eval (replaceTerm t19 "x" (TmN 3))
 match test with
   | TmN c1 -> printf "%i\n" c1
