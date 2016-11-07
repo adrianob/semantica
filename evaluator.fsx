@@ -1,7 +1,6 @@
 type term =
   | TmN of int
-  | TmTrue
-  | TmFalse
+  | TmBool of bool
   | TmPlus of term * term
   | TmMinus of term * term
   | TmApp of term * term
@@ -10,9 +9,11 @@ type term =
   | TmIf of term * term * term
   | TmLet of term * term * term
   | TmFun of term * term
+  | TmList of term * term
   | TmIsEmpty of term
   | TmHd of term
   | TmTl of term
+  | TmRaise
   | TmTry of term * term
 
 (* Excecao a ser ativada quando termo for uma FORMA NORMAL *)
@@ -20,8 +21,7 @@ exception NoRuleApplies
 let rec replaceTerm expression ident newTerm =
   match expression with
   | TmN t1 -> expression
-  | TmTrue -> expression
-  | TmFalse -> expression
+  | TmBool _ -> expression
   | TmVar ident -> newTerm
   | TmPlus (t1, t2) -> TmPlus (replaceTerm t1 ident newTerm, replaceTerm t2 ident newTerm)
   | TmMinus (t1, t2) -> TmMinus (replaceTerm t1 ident newTerm, replaceTerm t2 ident newTerm)
@@ -32,18 +32,35 @@ let rec replaceTerm expression ident newTerm =
   | _ -> expression
 let isValue t =
   match t with
-  | TmTrue -> true
-  | TmFalse -> true
+  | TmBool _ -> true
   | TmN _ -> true
   | TmFun (_, _) -> true
+  | TmNil -> true
+  | TmList (_, _) -> true
   | _ -> false
 (* Implementacao da funcao STEP de avaliacao em um passo *)
 let rec step t =
   match t with
+(* CASO TmList ( t1 , t2 ) *)
+  | TmList (t1, TmNil) ->
+    TmList (t1, TmNil)
+  | TmList (t1, t2) ->
+    TmList (t1, t2)
+(* CASO Hd t1 *)
+  | TmHd (TmList (t1, t2)) ->
+    t1
+(* CASO Hd t1 *)
+  | TmTl (TmList (t1, t2)) ->
+    t2
+(* CASO isEmtpy t1 *)
+  | TmIsEmpty TmNil ->
+    TmBool true
+  | TmIsEmpty (TmList (t1, t2)) ->
+    TmBool false
 (* CASO IF ( t1 , t2 , t3 ) *)
-  TmIf ( TmTrue , t2 , t3 ) -> (* regra E−IfTrue *)
+  | TmIf ( TmBool true , t2 , t3 ) -> (* regra E−IfTrue *)
       t2
-  | TmIf ( TmFalse , t2 , t3 ) -> (* regra E−False *)
+  | TmIf ( TmBool false , t2 , t3 ) -> (* regra E−False *)
     t3
   | TmIf ( t1 , t2 , t3 ) -> (* regra E−If *)
     let t1' = step t1 in
@@ -97,7 +114,6 @@ let t13 = eval (TmMinus (TmPlus (TmN 10, TmN 4), TmN 2) )
 let t18 = eval (TmApp ((TmFun (TmVar "x", (TmPlus (TmVar "x", TmN 2) ) ) ), TmN 5))
 let t19 = TmPlus (TmVar "x", TmN 2)
 
-(*printf "%b\n" (eval t1 = TmTrue)*)
 let test = eval (replaceTerm t19 "x" (TmN 3))
 match test with
   | TmN c1 -> printf "%i\n" c1
