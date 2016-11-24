@@ -1,8 +1,16 @@
 type term =
   | TmN of int
   | TmBool of bool
-  | TmPlus of term * term
-  | TmMinus of term * term
+  | TmPlus
+  | TmMinus
+  | TmMult
+  | TmLt
+  | TmLtOrE
+  | TmEqual
+  | TmGt
+  | TmGtOrE
+  | TmDiff
+  | TmOp of term * term * term
   | TmApp of term * term
   | TmNil
   | TmVar of string
@@ -22,14 +30,15 @@ let rec replaceTerm expression ident newTerm =
   match expression with
   | TmN t1 -> expression
   | TmBool _ -> expression
-  | TmVar ident -> newTerm
-  | TmPlus (t1, t2) -> TmPlus (replaceTerm t1 ident newTerm, replaceTerm t2 ident newTerm)
-  | TmMinus (t1, t2) -> TmMinus (replaceTerm t1 ident newTerm, replaceTerm t2 ident newTerm)
+  | TmVar t1 when (t1 = ident)-> newTerm
+  | TmVar _ -> expression
+  | TmOp (t1, t2, t3) -> TmOp (t1, replaceTerm t2 ident newTerm, replaceTerm t3 ident newTerm)
   | TmIf ( t1 , t2 , t3 ) -> TmIf (replaceTerm t1 ident newTerm, replaceTerm t2 ident newTerm, replaceTerm t3 ident newTerm)
   | TmApp (t1, t2) -> TmApp (replaceTerm t1 ident newTerm, replaceTerm t2 ident newTerm)
   | TmLet (TmVar ident, t2, t3) -> TmLet (TmVar ident, replaceTerm t2 ident newTerm, t3)
   | TmLet (t1, t2, t3) -> TmLet (t1, replaceTerm t2 ident newTerm, replaceTerm t3 ident newTerm)
   | _ -> expression
+
 let isValue t =
   match t with
   | TmBool _ -> true
@@ -38,6 +47,7 @@ let isValue t =
   | TmNil -> true
   | TmList (_, _) -> true
   | _ -> false
+
 (* Implementacao da funcao STEP de avaliacao em um passo *)
 let rec step t =
   match t with
@@ -66,23 +76,39 @@ let rec step t =
     let t1' = step t1 in
     TmIf ( t1', t2 , t3 )
 (* CASO + ( t1, t2 ) *)
-  | TmPlus ( TmN t1, TmN t2 )  ->
-    TmN (t1 + t2)
-  | TmPlus ( TmN t1, t2 )  ->
-    let t2' = step t2 in
-    TmPlus (TmN t1, t2')
-  | TmPlus ( t1, t2 )  ->
-    let t1' = step t1 in
-    TmPlus (t1', t2)
+  | TmOp (  TmPlus, TmN t2, TmN t3 ) ->
+    TmN (t2 + t3)
 (* CASO - ( t1, t2 ) *)
-  | TmMinus ( TmN t1, TmN t2 )  ->
-    TmN (t1 - t2)
-  | TmMinus ( TmN t1, t2 )  ->
+  | TmOp (  TmMinus, TmN t2, TmN t3 ) ->
+    TmN (t2 - t3)
+(* CASO * ( t1, t2 ) *)
+  | TmOp (  TmMult, TmN t2, TmN t3 ) ->
+    TmN (t2 * t3)
+(* CASO < ( t1, t2 ) *)
+  | TmOp (  TmLt, TmN t2, TmN t3 ) ->
+    TmBool (t2 < t3)
+(* CASO <= ( t1, t2 ) *)
+  | TmOp (  TmLtOrE, TmN t2, TmN t3 ) ->
+    TmBool (t2 <= t3)
+(* CASO > ( t1, t2 ) *)
+  | TmOp (  TmGt, TmN t2, TmN t3 ) ->
+    TmBool (t2 > t3)
+(* CASO >= ( t1, t2 ) *)
+  | TmOp (  TmGtOrE, TmN t2, TmN t3 ) ->
+    TmBool (t2 >= t3)
+(* CASO != ( t1, t2 ) *)
+  | TmOp (  TmDiff, TmN t2, TmN t3 ) ->
+    TmBool (t2 <> t3)
+(* CASO == ( t1, t2 ) *)
+  | TmOp (  TmEqual, TmN t2, TmN t3 ) ->
+    TmBool (t2 = t3)
+(* CASO op t1 t2 *)
+  | TmOp (  t1, TmN t2, t3 ) ->
+    let t3' = step t3 in
+    TmOp (t1, TmN t2, t3')
+  | TmOp (  t1, t2, t3 ) ->
     let t2' = step t2 in
-    TmMinus (TmN t1, t2')
-  | TmMinus ( t1, t2 )  ->
-    let t1' = step t1 in
-    TmMinus (t1', t2)
+    TmOp (t1, t2', t3)
 (* CASO t1 t2 *)
   | TmApp (TmFun (TmVar t1, t2), t3) when (isValue t3) ->
     replaceTerm t2 t1 t3
@@ -108,11 +134,11 @@ let rec eval t =
   with NoRuleApplies -> t
 (* ASTs para teste *)
 let t10 = eval (TmN 10)
-let t11 = eval (TmPlus (TmN 10, TmN 2) )
-let t12 = eval (TmPlus (TmPlus (TmN 10, TmN 4), TmN 2) )
-let t13 = eval (TmMinus (TmPlus (TmN 10, TmN 4), TmN 2) )
-let t18 = eval (TmApp ((TmFun (TmVar "x", (TmPlus (TmVar "x", TmN 2) ) ) ), TmN 5))
-let t19 = TmPlus (TmVar "x", TmN 2)
+let t11 = eval (TmOp (TmPlus, TmN 10, TmN 2) )
+let t12 = eval (TmOp (TmPlus, TmOp (TmPlus, TmN 10, TmN 4), TmN 2) )
+let t13 = eval (TmOp (TmMinus, TmOp (TmPlus, TmN 10, TmN 4), TmN 2) )
+let t18 = eval (TmApp ((TmFun (TmVar "x", (TmOp (TmPlus, TmVar "x", TmN 2) ) ) ), TmN 5))
+let t19 = TmOp (TmPlus, TmVar "x", TmN 2)
 
 let test = eval (replaceTerm t19 "x" (TmN 3))
 match test with
