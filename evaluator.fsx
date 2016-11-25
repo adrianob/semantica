@@ -4,6 +4,7 @@ type term =
   | TmPlus
   | TmMinus
   | TmMult
+  | TmDiv
   | TmLt
   | TmLtOrE
   | TmEqual
@@ -28,7 +29,7 @@ type term =
 exception NoRuleApplies
 let rec replaceTerm expression ident newTerm =
   match expression with
-  | TmN t1 -> expression
+  | TmN _ -> expression
   | TmBool _ -> expression
   | TmVar t1 when (t1 = ident)-> newTerm
   | TmVar _ -> expression
@@ -59,9 +60,13 @@ let rec step t =
 (* CASO Hd t1 *)
   | TmHd (TmList (t1, t2)) ->
     t1
+  | TmHd TmNil ->
+    TmRaise
 (* CASO Hd t1 *)
   | TmTl (TmList (t1, t2)) ->
     t2
+  | TmTl TmNil ->
+    TmRaise
 (* CASO isEmtpy t1 *)
   | TmIsEmpty TmNil ->
     TmBool true
@@ -72,6 +77,8 @@ let rec step t =
       t2
   | TmIf ( TmBool false , t2 , t3 ) -> (* regra E−False *)
     t3
+  | TmIf ( TmRaise , t2 , t3 ) -> (* regra E−False *)
+    TmRaise
   | TmIf ( t1 , t2 , t3 ) -> (* regra E−If *)
     let t1' = step t1 in
     TmIf ( t1', t2 , t3 )
@@ -102,6 +109,17 @@ let rec step t =
 (* CASO == ( t1, t2 ) *)
   | TmOp (  TmEqual, TmN t2, TmN t3 ) ->
     TmBool (t2 = t3)
+(* CASO div ( t1, t2 ) *)
+  | TmOp (  TmDiv, TmN t2, TmN t3 ) when (t3 <> 0) ->
+    TmN (t2 / t3)
+(* CASO try ( t1, t2 ) *)
+  | TmTry ( t1, t2) when (isValue t1) ->
+    t1
+  | TmTry ( TmRaise, t2)  ->
+    t2
+  | TmTry ( t1, t2)  ->
+    let t1' = step t1 in
+    TmTry (t1', t2)
 (* CASO op t1 t2 *)
   | TmOp (  t1, TmN t2, t3 ) ->
     let t3' = step t3 in
@@ -109,12 +127,20 @@ let rec step t =
   | TmOp (  t1, t2, t3 ) ->
     let t2' = step t2 in
     TmOp (t1, t2', t3)
+  | TmOp (  _, TmRaise, _ ) ->
+    TmRaise
+  | TmOp (  _, _, TmRaise ) ->
+    TmRaise
 (* CASO t1 t2 *)
   | TmApp (TmFun (TmVar t1, t2), t3) when (isValue t3) ->
     replaceTerm t2 t1 t3
   | TmApp (TmFun (TmVar t1, t2), t3) ->
     let t3' = step t3 in
     TmApp (TmFun (TmVar t1, t2), t3')
+  | TmApp (t1, TmRaise) when (isValue t1) ->
+    TmRaise
+  | TmApp (TmRaise, _) ->
+    TmRaise
   | TmApp (t1, t2) ->
     let t1' = step t1 in
     TmApp (t1' , t2)
