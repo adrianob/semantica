@@ -17,6 +17,7 @@ type term =
   | TmVar of string
   | TmIf of term * term * term
   | TmLet of term * term * term
+  | TmLetRec of term * term * term
   | TmFun of term * term
   | TmList of term * term
   | TmIsEmpty of term
@@ -40,6 +41,7 @@ let rec replaceTerm expression ident newTerm =
   | TmApp (t1, t2) -> TmApp (replaceTerm t1 ident newTerm, replaceTerm t2 ident newTerm)
   | TmLet (TmVar t1, t2, t3) when(t1 = ident) -> TmLet (TmVar ident, replaceTerm t2 ident newTerm, t3)
   | TmLet (TmVar t1, t2, t3) when(t1 <> ident) -> TmLet (TmVar t1, replaceTerm t2 ident newTerm, replaceTerm t3 ident newTerm)
+  | TmLetRec (TmVar t1, t2, t3) when(t1 <> ident) -> TmLetRec (TmVar t1, replaceTerm t2 ident newTerm, replaceTerm t3 ident newTerm)
   | _ -> expression
 
 let isValue t =
@@ -152,6 +154,9 @@ let rec step t =
   | TmLet (TmVar t1, t2, t3) ->
     let t2' = step t2 in
     TmLet (TmVar t1, t2', t3)
+(* CASO  TmLetRec *)
+  | TmLetRec (TmVar t1, TmFun (t2, t3), t4) ->
+    replaceTerm t4 t1 (TmFun (t2, TmLetRec (TmVar t1, TmFun (t2, t3), t3)))
 (* CASO Nenhuma regra se aplique ao termo *)
   | _ ->
     raise NoRuleApplies
@@ -184,6 +189,13 @@ let t21 = eval (TmLet (TmVar "x",
                        )
 )
 
+let t23 = eval (TmLetRec (TmVar "fat",
+                          TmFun (TmVar "x", TmIf (TmOp (TmEqual, TmVar "x", TmN 0),
+                                                  TmN 1,
+                                                  TmOp (TmMult, TmVar "x", TmApp (TmVar "fat", TmOp (TmMinus, TmVar "x", TmN 1))))),
+                          TmApp (TmVar "fat", TmN 5)
+                           ))
+
 let test = eval (replaceTerm t19 "x" (TmN 3))
 match test with
   | TmN c1 -> printf "%i\n" c1
@@ -198,5 +210,8 @@ match t22 with
   | TmN c1 -> printf "%i\n" c1
   | _ -> printf "nan"
 match t21 with
+  | TmN c1 -> printf "%i\n" c1
+  | _ -> printf "nan"
+match t23 with
   | TmN c1 -> printf "%i\n" c1
   | _ -> printf "nan"
