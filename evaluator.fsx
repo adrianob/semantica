@@ -62,15 +62,21 @@ let rec step t =
   | TmList (t1, t2) ->
     TmList (t1, t2)
 (* CASO Hd t1 *)
-  | TmHd (TmList (t1, t2)) ->
+  | TmHd (TmList (t1, t2)) when (isValue t1) ->
     t1
   | TmHd TmNil ->
     TmRaise
+  | TmHd (TmList (t1, t2)) ->
+    let t1' = step t1 in
+    TmHd (TmList (t1', t2))
 (* CASO Hd t1 *)
-  | TmTl (TmList (t1, t2)) ->
+  | TmTl (TmList (t1, t2)) when (isValue t2)->
     t2
   | TmTl TmNil ->
     TmRaise
+  | TmTl (TmList (t1, t2)) ->
+    let t2' = step t2 in
+    TmTl (TmList (t1, t2'))
 (* CASO isEmtpy t1 *)
   | TmIsEmpty TmNil ->
     TmBool true
@@ -116,6 +122,8 @@ let rec step t =
 (* CASO div ( t1, t2 ) *)
   | TmOp (  TmDiv, TmN t2, TmN t3 ) when (t3 <> 0) ->
     TmN (t2 / t3)
+  | TmOp (  TmDiv, TmN t2, TmN t3 ) when (t3 = 0) ->
+    TmRaise
 (* CASO try ( t1, t2 ) *)
   | TmTry ( t1, t2) when (isValue t1) ->
     t1
@@ -160,27 +168,27 @@ let rec step t =
 (* CASO Nenhuma regra se aplique ao termo *)
   | _ ->
     raise NoRuleApplies
+
 (* Implementacao de EVAL *)
 let rec eval t =
   try let t' = step t
       in eval t'
   with NoRuleApplies -> t
+
 (* ASTs para teste *)
-let t10 = eval (TmN 10)
-let t11 = eval (TmOp (TmPlus, TmN 10, TmN 2) )
-let t12 = eval (TmOp (TmPlus, TmOp (TmPlus, TmN 10, TmN 4), TmN 2) )
-let t13 = eval (TmOp (TmMinus, TmOp (TmPlus, TmN 10, TmN 4), TmN 2) )
-let t18 = eval (TmApp ((TmFun (TmVar "x", (TmOp (TmPlus, TmVar "x", TmN 2) ) ) ), TmN 5))
-let t19 = TmOp (TmPlus, TmVar "x", TmN 2)
-let t22 = eval (TmLet (TmVar "foo", TmFun (TmVar "y", TmOp (TmPlus, TmN 5, TmVar "y")), TmApp (TmVar "foo", TmN 10)))
+let t1 = eval (TmOp (TmPlus, TmN 10, TmN 8) )
+let t2 = eval (TmOp (TmPlus, TmOp (TmPlus, TmN 10, TmN 4), TmN 2) )
+let t3 = eval (TmOp (TmMinus, TmOp (TmPlus, TmN 10, TmN 4), TmN 3) )
+let t4 = eval (TmApp ((TmFun (TmVar "x", (TmOp (TmPlus, TmVar "x", TmN 2) ) ) ), TmN 5))
+let t5 = eval (TmLet (TmVar "foo", TmFun (TmVar "y", TmOp (TmPlus, TmN 5, TmVar "y")), TmApp (TmVar "foo", TmN 10)))
 (*
 let x = 2 in
   let foo = (fn y => x+y) in
     let x = 5 in
       foo (10)
 *)
-let t20 = eval (TmLet (TmVar "x", TmN 2, TmLet (TmVar "foo", TmFun (TmVar "y", TmOp (TmPlus, TmVar "x", TmVar "y")) , TmLet (TmVar "x", TmN 5, TmApp (TmVar "foo", TmN 10)))))
-let t21 = eval (TmLet (TmVar "x",
+let t6 = eval (TmLet (TmVar "x", TmN 2, TmLet (TmVar "foo", TmFun (TmVar "y", TmOp (TmPlus, TmVar "x", TmVar "y")) , TmLet (TmVar "x", TmN 5, TmApp (TmVar "foo", TmN 10)))))
+let t7 = eval (TmLet (TmVar "x",
                        TmN 2,
                        TmLet (TmVar "foo",
                               TmFun (TmVar "y", TmOp (TmPlus, TmVar "x", TmVar "y")),
@@ -189,29 +197,43 @@ let t21 = eval (TmLet (TmVar "x",
                        )
 )
 
-let t23 = eval (TmLetRec (TmVar "fat",
+let t8 = eval (TmLetRec (TmVar "fat",
                           TmFun (TmVar "x", TmIf (TmOp (TmEqual, TmVar "x", TmN 0),
                                                   TmN 1,
                                                   TmOp (TmMult, TmVar "x", TmApp (TmVar "fat", TmOp (TmMinus, TmVar "x", TmN 1))))),
                           TmApp (TmVar "fat", TmN 5)
                            ))
+let t9 = eval(TmHd (TmList (TmN 4, TmList (TmN 5, TmNil))))
+let t10 = eval (TmOp (TmDiv, TmN 10, TmN 0) )
 
-let test = eval (replaceTerm t19 "x" (TmN 3))
-match test with
-  | TmN c1 -> printf "%i\n" c1
+match t1 with
+  | TmN c1 -> printf "t1 = %i\n" c1
   | _ -> printf "nan"
-match t18 with
-  | TmN c1 -> printf "%i\n" c1
+match t2 with
+  | TmN c1 -> printf "t2 = %i\n" c1
   | _ -> printf "nan"
-match t20 with
-  | TmN c1 -> printf "%i\n" c1
+match t3 with
+  | TmN c1 -> printf "t3 = %i\n" c1
   | _ -> printf "nan"
-match t22 with
-  | TmN c1 -> printf "%i\n" c1
+match t4 with
+  | TmN c1 -> printf "t4 = %i\n" c1
   | _ -> printf "nan"
-match t21 with
-  | TmN c1 -> printf "%i\n" c1
+match t5 with
+  | TmN c1 -> printf "t5 = %i\n" c1
   | _ -> printf "nan"
-match t23 with
-  | TmN c1 -> printf "%i\n" c1
+match t6 with
+  | TmN c1 -> printf "t6 = %i\n" c1
+  | _ -> printf "nan"
+match t7 with
+  | TmN c1 -> printf "t7 = %i\n" c1
+  | _ -> printf "nan"
+match t8 with
+  | TmN c1 -> printf "t8 = %i\n" c1
+  | _ -> printf "nan"
+match t9 with
+  | TmN c1 -> printf "t9 = %i\n" c1
+  | _ -> printf "nan"
+match t10 with
+  | TmN c1 -> printf "t10 = %i\n" c1
+  | TmRaise -> printf "t10 = raise\n"
   | _ -> printf "nan"
